@@ -431,7 +431,7 @@
 
 -(BOOL)isInManualResize
 {
-  return inManualResize || inManualMove;
+  return inManualResize;
 }
 
 -(void)beginManualResize
