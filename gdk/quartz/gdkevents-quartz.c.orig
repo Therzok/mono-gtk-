@@ -466,6 +466,11 @@ get_event_mask_from_ns_event (NSEvent *nsevent)
     case NSMouseExited:
       return GDK_LEAVE_NOTIFY_MASK;
 
+    case NSEventTypeMagnify:
+    case NSEventTypeRotate:
+    case NSEventTypeSwipe:
+      return 0;
+
     default:
       g_assert_not_reached ();
     }
@@ -675,6 +680,8 @@ _gdk_quartz_events_update_focus_window (GdkWindow *window,
        * everything in the window is set to correct state.
        */
       generate_motion_event (window);
+
+      _gdk_quartz_update_symbolic_hotkeys ();
     }
 }
 
@@ -696,6 +703,37 @@ _gdk_quartz_events_send_map_event (GdkWindow *window)
   
       gdk_event_put (&event);
     }
+}
+
+static NSView *
+find_nsview_at_pos (GdkWindowImplQuartz *impl, gint x, gint y)
+{
+  NSView *view = impl->view;
+  guint n_subviews;
+  guint i;
+
+  n_subviews = [[view subviews] count];
+
+  for (i = 0; i < n_subviews; ++i)
+    {
+      NSView* sv = [[view subviews] objectAtIndex:i];
+      NSRect r = [sv frame];
+
+      if (sv == impl->layer_view)
+        continue;
+
+      if (r.origin.x <= x && r.origin.x + r.size.width >= x &&
+          r.origin.y <= y && r.origin.y + r.size.height >= y)
+        {
+          NSView* child = find_nsview_at_pos (impl, x - r.origin.x, y - r.origin.y);
+          if (child != NULL)
+            return child;
+          else
+            return sv;
+        }
+    }
+
+  return NULL;
 }
 
 static GdkWindow *
@@ -826,7 +864,7 @@ find_window_for_ns_event (NSEvent *nsevent,
                       {
                         g_warning ("grab_toplevel == NULL");
                       }
-                    else
+                    else if (!gdk_window_is_destroyed (grab_toplevel))
                       {
                         get_window_point_from_screen_point (grab_toplevel,
                                                             screen_point, x, y);
@@ -864,34 +902,21 @@ find_window_for_ns_event (NSEvent *nsevent,
               {
                 GdkWindowObject *toplevel_private;
                 GdkWindowImplQuartz *toplevel_impl;
-                guint n_subviews;
-                guint i;
+                NSView *subview;
 
                 toplevel = toplevel_under_pointer;
 
                 toplevel_private = (GdkWindowObject *)toplevel;
                 toplevel_impl = (GdkWindowImplQuartz *)toplevel_private->impl;
 
-                n_subviews = [[toplevel_impl->view subviews] count];
+                subview = find_nsview_at_pos (toplevel_impl, *x, *y);
+                if (subview != NULL && ![subview isKindOfClass:[GdkQuartzView class]]) {
+                  g_signal_emit_by_name (toplevel, "native-child-event",
+                                         subview, nsevent);
 
-                for (i = 0; i < n_subviews; ++i)
-                  {
-                    NSView* sv = [[toplevel_impl->view subviews] objectAtIndex:i];
-                    NSRect r = [sv frame];
-
-                    if (sv == toplevel_impl->layer_view)
-                      continue;
-
-                    if (r.origin.x <= *x && r.origin.x + r.size.width >= *x &&
-                        r.origin.y <= *y && r.origin.y + r.size.height >= *y)
-                      {
-                        g_signal_emit_by_name (toplevel, "native-child-event",
-                                               sv, nsevent);
-
-                        /* event is within subview, forward back to Cocoa */
-                        return NULL;
-                      }
-                  }
+                  /* event is within subview, forward back to Cocoa */
+                  return NULL;
+                }
 
                 *x = x_tmp;
                 *y = y_tmp;
@@ -918,6 +943,11 @@ find_window_for_ns_event (NSEvent *nsevent,
       if (_gdk_display->keyboard_grab.window && !_gdk_display->keyboard_grab.owner_events)
         return gdk_window_get_effective_toplevel (_gdk_display->keyboard_grab.window);
 
+      return toplevel;
+
+    case NSEventTypeMagnify:
+    case NSEventTypeRotate:
+    case NSEventTypeSwipe:
       return toplevel;
 
     default:
@@ -1188,6 +1218,139 @@ fill_key_event (GdkWindow    *window,
 	  event->key.keyval ? gdk_keyval_name (event->key.keyval) : "(none)",
 	  event->key.keyval));
 }
+
+
+static GdkWindow *
+find_window_for_ns_gesture_event (NSEvent *nsevent,
+                                  gint    *_x,
+                                  gint    *_y,
+                                  gint    *x_root,
+                                  gint    *y_root)
+{
+  GdkDisplay *display = _gdk_display;
+  GdkWindow *toplevel_window = NULL, *pointer_window = NULL;
+  gdouble found_x, found_y;
+  gint x, y;
+
+  toplevel_window = find_window_for_ns_event (nsevent, &x, &y, x_root, y_root);
+  if (!toplevel_window)
+    return NULL;
+
+  if (toplevel_window == display->pointer_info.toplevel_under_pointer)
+    pointer_window = _gdk_window_find_descendant_at (toplevel_window,
+                                                     x, y,
+                                                     &found_x, &found_y);
+  else
+    pointer_window = NULL;
+
+  *_x = found_x;
+  *_y = found_y;
+
+  return pointer_window;
+}
+
+
+GdkEvent *
+_gdk_quartz_events_create_magnify_event (NSEvent *nsevent)
+{
+  GdkEvent *event;
+  GdkWindow *window = NULL;
+  gint x, y, x_root, y_root;
+
+  window = find_window_for_ns_gesture_event (nsevent,
+                                             &x, &y,
+                                             &x_root, &y_root);
+
+  if (!window)
+    return NULL;
+
+  event = gdk_event_new (GDK_GESTURE_MAGNIFY);
+
+  event->any.type = GDK_GESTURE_MAGNIFY;
+  event->magnify.window = window;
+  event->magnify.time = get_time_from_ns_event (nsevent);
+  event->magnify.x = x;
+  event->magnify.y = y;
+  event->magnify.x_root = x_root;
+  event->magnify.y_root = y_root;
+  event->magnify.magnification = [nsevent magnification];
+  event->magnify.state = get_keyboard_modifiers_from_ns_event (nsevent) |
+                        _gdk_quartz_events_get_current_mouse_modifiers ();
+  event->magnify.device = _gdk_display->core_pointer;
+
+  fixup_event (event);
+
+  return event;
+}
+
+GdkEvent *
+_gdk_quartz_events_create_rotate_event (NSEvent *nsevent)
+{
+  GdkEvent *event;
+  GdkWindow *window;
+  gint x, y, x_root, y_root;
+
+  window = find_window_for_ns_gesture_event (nsevent,
+                                             &x, &y,
+                                             &x_root, &y_root);
+
+  if (!window)
+    return NULL;
+
+  event = gdk_event_new (GDK_GESTURE_ROTATE);
+
+  event->any.type = GDK_GESTURE_ROTATE;
+  event->rotate.window = window;
+  event->rotate.time = get_time_from_ns_event (nsevent);
+  event->rotate.x = x;
+  event->rotate.y = y;
+  event->rotate.x_root = x_root;
+  event->rotate.y_root = y_root;
+  event->rotate.rotation = [nsevent rotation];
+  event->rotate.state = get_keyboard_modifiers_from_ns_event (nsevent) |
+                        _gdk_quartz_events_get_current_mouse_modifiers ();
+  event->rotate.device = _gdk_display->core_pointer;
+
+  fixup_event (event);
+
+  return event;
+}
+
+GdkEvent *
+_gdk_quartz_events_create_swipe_event (NSEvent *nsevent)
+{
+  GdkEvent *event;
+  GdkWindow *window;
+  gint x, y, x_root, y_root;
+
+  window = find_window_for_ns_gesture_event (nsevent,
+                                             &x, &y,
+                                             &x_root, &y_root);
+
+  if (!window)
+    return NULL;
+
+  event = gdk_event_new (GDK_GESTURE_SWIPE);
+
+  event->any.type = GDK_GESTURE_SWIPE;
+  event->swipe.window = window;
+  event->swipe.time = get_time_from_ns_event (nsevent);
+  event->swipe.x = x;
+  event->swipe.y = y;
+  event->swipe.x_root = x_root;
+  event->swipe.y_root = y_root;
+  event->swipe.delta_x = [nsevent deltaX];
+  event->swipe.delta_y = [nsevent deltaY];
+  event->swipe.state = get_keyboard_modifiers_from_ns_event (nsevent) |
+                        _gdk_quartz_events_get_current_mouse_modifiers ();
+  event->swipe.device = _gdk_display->core_pointer;
+
+  fixup_event (event);
+
+  return event;
+}
+
+
 
 static gboolean
 synthesize_crossing_event (GdkWindow *window,
@@ -1522,6 +1685,11 @@ gdk_event_translate (GdkEvent *event,
       GdkWindowObject *private = (GdkWindowObject *)window;
       GdkWindowImplQuartz *impl = GDK_WINDOW_IMPL_QUARTZ (private->impl);
 
+      GdkQuartzWindow *nswindow = ((GdkWindowImplQuartz *)private->impl)->toplevel;
+      GdkQuartzView *nsview = ((GdkWindowImplQuartz *)private->impl)->view;
+
+      [nswindow makeFirstResponder:nsview];
+
       if (![NSApp isActive])
         {
           [NSApp activateIgnoringOtherApps:YES];
@@ -1653,6 +1821,56 @@ gdk_event_translate (GdkEvent *event,
     case NSFlagsChanged:
       {
         GdkEventType type;
+        GdkWindowObject *private = (GdkWindowObject *)window;
+        GdkQuartzWindow *nswindow = ((GdkWindowImplQuartz *)private->impl)->toplevel;
+        GdkQuartzView *nsview = ((GdkWindowImplQuartz *)private->impl)->view;
+
+        NSView *tmp_view = [nswindow firstResponder];
+        gboolean gtk_child = FALSE;
+
+        if (event_type == NSKeyDown && ([nsevent modifierFlags] & NSCommandKeyMask) != 0 && [[nsevent characters] characterAtIndex:0] == 'z')
+          {
+            if ([tmp_view respondsToSelector:@selector(undoManager)])
+              {
+                NSUndoManager *undo_manager = [tmp_view undoManager];
+
+                if (([nsevent modifierFlags] & NSShiftKeyMask) != 0)
+                  {
+                    if ([undo_manager canRedo])
+                      {
+                        [undo_manager redo];
+                        return_val = FALSE;
+                        break;
+                      }
+                  }
+                else
+                  {
+                    if ([undo_manager canUndo])
+                      {
+                        [undo_manager undo];
+                        return_val = FALSE;
+                        break;
+                      }
+                  }
+              }
+          }
+
+        while (tmp_view != NULL)
+          {
+            if (tmp_view && [tmp_view respondsToSelector:@selector(isGtkView)])
+              gtk_child = TRUE;
+
+            if ([tmp_view respondsToSelector:@selector(superview)])
+              tmp_view = [tmp_view superview];
+            else
+              tmp_view = NULL;
+          }
+
+        if (!gtk_child && ![[nswindow firstResponder] respondsToSelector:@selector(isGtkView)])
+          {
+            return_val = FALSE;
+            break;
+          }
 
         type = _gdk_quartz_keys_event_type (nsevent);
         if (type == GDK_NOTHING)
@@ -1666,6 +1884,13 @@ gdk_event_translate (GdkEvent *event,
       _gdk_input_quartz_tablet_proximity ([nsevent pointingDeviceType]);
       return_val = FALSE;
       break;
+
+    /* Gesture events are handled through GdkQuartzView, because the
+     * Apple documentation states very clearly that such events should
+     * not be handled through a tracking loop (like GDK uses).
+     * Experiments show that gesture events do not get through our
+     * tracking loop either.
+     */
 
     default:
       /* Ignore everything elsee. */
