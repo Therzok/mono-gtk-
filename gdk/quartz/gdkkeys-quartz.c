@@ -58,6 +58,8 @@
 #include "gdkprivate-quartz.h"
 #include <Foundation/Foundation.h>
 
+#include <glib/gstdio.h>
+
 #define NUM_KEYCODES 128
 #define KEYVALS_PER_KEYCODE 4
 
@@ -68,6 +70,7 @@ static GdkKeymap *default_keymap = NULL;
  */
 static guint *keyval_array = NULL;
 static CFArrayRef global_hotkeys = NULL;
+static struct timespec preferences_last_mtime = {};
 
 static inline UniChar
 macroman2ucs (unsigned char c)
@@ -815,12 +818,45 @@ gdk_keymap_map_virtual_modifiers (GdkKeymap       *keymap,
   return TRUE;
 }
 
+static gboolean
+should_update_symbolic_hotkeys ()
+{
+  gchar *path_segments[] = {
+    g_get_home_dir(),
+    "Library",
+    "Preferences",
+    "com.apple.symbolichotkeys.plist",
+    NULL,
+  };
+
+  gchar *preferences_file = g_build_pathv(G_DIR_SEPARATOR_S, path_segments);
+  GStatBuf buf;
+
+  int res = g_stat(preferences_file, &buf);
+  g_free(preferences_file);
+
+  if (res != 0) {
+    /* In case we have any IO error, ensure correctness by querying */
+    return TRUE;
+  }
+
+  bool preferences_file_modified = preferences_last_mtime.tv_sec != buf.st_mtimespec.tv_sec
+    && preferences_last_mtime.tv_nsec != buf.st_mtimespec.tv_nsec;
+
+  preferences_last_mtime.tv_sec = buf.st_mtimespec.tv_sec;
+  preferences_last_mtime.tv_nsec = buf.st_mtimespec.tv_nsec;
+
+  return preferences_file_modified;
+}
+
 void
 _gdk_quartz_update_symbolic_hotkeys ()
 {
-  _gdk_quartz_release_symbolic_hotkeys ();
+  if (should_update_symbolic_hotkeys ()) {
+    _gdk_quartz_release_symbolic_hotkeys ();
 
-  CopySymbolicHotKeys (&global_hotkeys);
+    CopySymbolicHotKeys (&global_hotkeys);
+  }
 }
 
 void
