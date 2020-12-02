@@ -534,6 +534,7 @@ gtk_ns_view_notify (GObject    *object,
                     GParamSpec *pspec)
 {
   GtkNSView *ns_view = GTK_NS_VIEW (object);
+  GtkWindow *window = GTK_WINDOW (gtk_widget_get_toplevel (GTK_WIDGET (object)));
 
   if (G_OBJECT_CLASS (gtk_ns_view_parent_class)->notify)
     G_OBJECT_CLASS (gtk_ns_view_parent_class)->notify (object, pspec);
@@ -550,7 +551,7 @@ gtk_ns_view_notify (GObject    *object,
 
       if (gtk_widget_has_focus (GTK_WIDGET (object)))
         [ns_window makeFirstResponder:ns_view->priv->view];
-      else
+      else if ([ns_window firstResponder] == ns_view->priv->view || !gtk_window_is_active (window))
         [ns_window makeFirstResponder:nil];
     }
 }
@@ -738,6 +739,11 @@ gtk_ns_view_key_press (GtkWidget   *widget,
 
           switch (event->keyval)
             {
+            case GDK_KEY_z: /* undo */
+              if ([[text_view undoManager] canUndo])
+                [[text_view undoManager] undo];
+              return TRUE;
+
             case GDK_KEY_c: /* copy */
               if (has_selection)
                 [text_view copy: text_view];
