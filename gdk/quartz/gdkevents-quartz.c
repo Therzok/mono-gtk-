@@ -708,9 +708,8 @@ _gdk_quartz_events_send_map_event (GdkWindow *window)
 }
 
 static NSView *
-find_nsview_at_pos (GdkWindowImplQuartz *impl, gint x, gint y)
+find_nsview_at_pos (NSView *view, NSView *layer_view, gint x, gint y)
 {
-  NSView *view = impl->view;
   guint n_subviews;
   guint i;
 
@@ -721,14 +720,14 @@ find_nsview_at_pos (GdkWindowImplQuartz *impl, gint x, gint y)
       NSView* sv = [[view subviews] objectAtIndex:i];
       NSRect r = [sv frame];
 
-      if (sv == impl->layer_view)
+      if (sv == layer_view)
         continue;
 
       if (![sv isHidden] &&
           r.origin.x <= x && r.origin.x + r.size.width >= x &&
           r.origin.y <= y && r.origin.y + r.size.height >= y)
         {
-          NSView* child = find_nsview_at_pos (impl, x - r.origin.x, y - r.origin.y);
+          NSView* child = find_nsview_at_pos (sv, layer_view, x - r.origin.x, y - r.origin.y);
           if (child != NULL)
             return child;
           else
@@ -912,7 +911,7 @@ find_window_for_ns_event (NSEvent *nsevent,
                 toplevel_private = (GdkWindowObject *)toplevel;
                 toplevel_impl = (GdkWindowImplQuartz *)toplevel_private->impl;
 
-                subview = find_nsview_at_pos (toplevel_impl, x_tmp, y_tmp);
+                subview = find_nsview_at_pos (toplevel_impl->view, toplevel_impl->layer_view, x_tmp, y_tmp);
                 if (subview != NULL && ![subview isKindOfClass:[GdkQuartzView class]]) {
                   g_signal_emit_by_name (toplevel, "native-child-event",
                                          subview, nsevent);
