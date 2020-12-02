@@ -34,6 +34,8 @@
   NSPoint initialMoveLocation;
   NSPoint initialResizeLocation;
   NSRect  initialResizeFrame;
+
+  BOOL    _allowDelegateToBeSetToNil;
 }
 
 -(BOOL)isInMove;

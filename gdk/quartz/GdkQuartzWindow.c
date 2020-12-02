@@ -24,6 +24,13 @@
 
 @implementation GdkQuartzWindow
 
+-(void)dealloc
+{
+  // During deallocation, Cocoa resets the delegate to nil
+  // We need to track that so that we don't throw an error
+  _allowDelegateToBeSetToNil = YES;
+}
+
 -(BOOL)windowShouldClose:(id)sender
 {
   GdkWindow *window = [[self contentView] gdkWindow];
@@ -259,6 +266,16 @@
   return [super makeFirstResponder:responder];
 }
 
+-(void)setDelegate:(id<NSWindowDelegate>)delegate
+{
+  if ([super delegate] == nil || (_allowDelegateToBeSetToNil && delegate == nil)) {
+    [super setDelegate:delegate];
+  } else {
+    // If we allow the window delegate to be replaced, everything breaks.
+    g_critical ("Setting a delegate on GdkQuartzWindow is forbidden, because everything will break.");
+  }
+}
+
 -(id)initWithContentRect:(NSRect)contentRect styleMask:(NSUInteger)styleMask backing:(NSBackingStoreType)backingType defer:(BOOL)flag screen:(NSScreen *)screen
 {
   self = [super initWithContentRect:contentRect
@@ -271,6 +288,7 @@
   [self setDelegate:self];
   [self setReleasedWhenClosed:YES];
 
+  _allowDelegateToBeSetToNil = NO;
   return self;
 }
 
