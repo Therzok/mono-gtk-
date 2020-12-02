@@ -235,13 +235,13 @@ gdk_text_property_to_utf8_list_for_display (GdkDisplay    *display,
 GdkAtom
 gdk_quartz_pasteboard_type_to_atom_libgtk_only (NSString *type)
 {
-  if ([type isEqualToString:NSStringPboardType])
+  if ([type isEqualToString:NSPasteboardTypeString])
     return gdk_atom_intern_static_string ("UTF8_STRING");
-  else if ([type isEqualToString:NSTIFFPboardType])
+  else if ([type isEqualToString:NSPasteboardTypeTIFF])
     return gdk_atom_intern_static_string ("image/tiff");
-  else if ([type isEqualToString:NSColorPboardType])
+  else if ([type isEqualToString:NSPasteboardTypeColor])
     return gdk_atom_intern_static_string ("application/x-color");
-  else if ([type isEqualToString:NSURLPboardType])
+  else if ([type isEqualToString:NSPasteboardTypeURL])
     return gdk_atom_intern_static_string ("text/uri-list");
   else
     return gdk_atom_intern ([type UTF8String], FALSE);
@@ -251,13 +251,13 @@ NSString *
 gdk_quartz_target_to_pasteboard_type_libgtk_only (const char *target)
 {
   if (strcmp (target, "UTF8_STRING") == 0)
-    return NSStringPboardType;
+    return NSPasteboardTypeString;
   else if (strcmp (target, "image/tiff") == 0)
-    return NSTIFFPboardType;
+    return NSPasteboardTypeTIFF;
   else if (strcmp (target, "application/x-color") == 0)
-    return NSColorPboardType;
+    return NSPasteboardTypeColor;
   else if (strcmp (target, "text/uri-list") == 0)
-    return NSURLPboardType;
+    return NSPasteboardTypeURL;
   else
     return [NSString stringWithUTF8String:target];
 }
