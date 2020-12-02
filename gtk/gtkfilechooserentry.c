@@ -28,6 +28,7 @@
 #include "gtkfilechooserentry.h"
 #include "gtklabel.h"
 #include "gtkmain.h"
+#include "gtkmarshalers.h"
 #include "gtkwindow.h"
 #include "gtkintl.h"
 #include "gtkalias.h"
@@ -43,6 +44,11 @@ typedef struct _GtkFileChooserEntryClass GtkFileChooserEntryClass;
 struct _GtkFileChooserEntryClass
 {
   GtkEntryClass parent_class;
+};
+
+enum {
+  XAM_LOAD_FOLDER,
+  LAST_SIGNAL
 };
 
 /* Action to take when the current folder finishes loading (for explicit or automatic completion) */
@@ -168,6 +174,8 @@ static void pop_up_completion_feedback (GtkFileChooserEntry *chooser_entry,
 
 static GtkEditableClass *parent_editable_iface;
 
+static guint signals[LAST_SIGNAL] = { 0 };
+
 G_DEFINE_TYPE_WITH_CODE (GtkFileChooserEntry, _gtk_file_chooser_entry, GTK_TYPE_ENTRY,
 			 G_IMPLEMENT_INTERFACE (GTK_TYPE_EDITABLE,
 						gtk_file_chooser_entry_iface_init))
@@ -188,6 +196,14 @@ _gtk_file_chooser_entry_class_init (GtkFileChooserEntryClass *class)
   widget_class->focus_out_event = gtk_file_chooser_entry_focus_out_event;
 
   entry_class->activate = gtk_file_chooser_entry_activate;
+
+  signals[XAM_LOAD_FOLDER] = g_signal_new (I_("xam-load-folder"),
+                                           G_OBJECT_CLASS_TYPE (gobject_class),
+                                           G_SIGNAL_RUN_LAST,
+                                           NULL,
+                                           NULL, NULL,
+                                           _gtk_marshal_VOID__VOID,
+                                           G_TYPE_NONE, 0);
 }
 
 static void
@@ -1301,6 +1317,7 @@ gtk_file_chooser_entry_activate (GtkEntry *entry)
   GtkFileChooserEntry *chooser_entry = GTK_FILE_CHOOSER_ENTRY (entry);
 
   commit_completion_and_refresh (chooser_entry);
+  g_signal_emit (chooser_entry, signals[XAM_LOAD_FOLDER], 0);
   GTK_ENTRY_CLASS (_gtk_file_chooser_entry_parent_class)->activate (entry);
 }
 

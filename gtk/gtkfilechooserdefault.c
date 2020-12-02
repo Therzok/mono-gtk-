@@ -4409,17 +4409,26 @@ file_pane_create (GtkFileChooserDefault *impl,
 }
 
 static void
+on_folder_loaded (GtkFileChooserEntry *entry, GtkFileChooserDefault *chooser)
+{
+  gtk_file_chooser_default_should_respond (GTK_FILE_CHOOSER_EMBED (chooser));
+  g_signal_emit_by_name (chooser, "response-requested");
+}
+
+static void
 location_entry_create (GtkFileChooserDefault *impl)
 {
   if (!impl->location_entry)
-    impl->location_entry = _gtk_file_chooser_entry_new (TRUE);
+    {
+      impl->location_entry = _gtk_file_chooser_entry_new (TRUE);
+      g_signal_connect (impl->location_entry, "xam-load-folder", G_CALLBACK (on_folder_loaded), impl);
+    }
 
   _gtk_file_chooser_entry_set_file_system (GTK_FILE_CHOOSER_ENTRY (impl->location_entry),
 					   impl->file_system);
   _gtk_file_chooser_entry_set_local_only (GTK_FILE_CHOOSER_ENTRY (impl->location_entry), impl->local_only);
   _gtk_file_chooser_entry_set_action (GTK_FILE_CHOOSER_ENTRY (impl->location_entry), impl->action);
   gtk_entry_set_width_chars (GTK_ENTRY (impl->location_entry), 45);
-  gtk_entry_set_activates_default (GTK_ENTRY (impl->location_entry), TRUE);
 }
 
 /* Creates the widgets specific to Save mode */

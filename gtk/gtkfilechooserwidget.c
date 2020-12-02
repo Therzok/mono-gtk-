@@ -24,6 +24,7 @@
 #include "gtkfilechooserwidget.h"
 #include "gtkfilechooserdefault.h"
 #include "gtkfilechooserutils.h"
+#include "gtkmarshalers.h"
 #include "gtktypebuiltins.h"
 #include "gtkfilechooserembed.h"
 #include "gtkintl.h"
@@ -101,7 +102,6 @@ gtk_file_chooser_widget_constructor (GType                  type,
   gtk_widget_push_composite_child ();
 
   priv->impl = _gtk_file_chooser_default_new ();
-  
   gtk_box_pack_start (GTK_BOX (object), priv->impl, TRUE, TRUE, 0);
   gtk_widget_show (priv->impl);
 

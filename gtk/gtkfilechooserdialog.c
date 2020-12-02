@@ -254,7 +254,7 @@ file_chooser_widget_response_requested (GtkWidget            *widget,
 
   g_list_free (children);
 }
-  
+
 static GObject*
 gtk_file_chooser_dialog_constructor (GType                  type,
 				     guint                  n_construct_properties,
