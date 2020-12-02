@@ -724,7 +724,8 @@ find_nsview_at_pos (GdkWindowImplQuartz *impl, gint x, gint y)
       if (sv == impl->layer_view)
         continue;
 
-      if (r.origin.x <= x && r.origin.x + r.size.width >= x &&
+      if (![sv isHidden] &&
+          r.origin.x <= x && r.origin.x + r.size.width >= x &&
           r.origin.y <= y && r.origin.y + r.size.height >= y)
         {
           NSView* child = find_nsview_at_pos (impl, x - r.origin.x, y - r.origin.y);
