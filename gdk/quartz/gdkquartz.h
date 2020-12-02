@@ -39,6 +39,10 @@ typedef unsigned int NSUInteger;
 typedef float CGFloat;
 #endif
 
+#ifndef NSPasteboardTypeURL
+#define NSPasteboardTypeURL NSURLPboardType
+#endif
+
 typedef enum
 {
   GDK_OSX_UNSUPPORTED = 0,
