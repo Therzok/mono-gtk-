@@ -911,7 +911,7 @@ find_window_for_ns_event (NSEvent *nsevent,
                 toplevel_private = (GdkWindowObject *)toplevel;
                 toplevel_impl = (GdkWindowImplQuartz *)toplevel_private->impl;
 
-                subview = find_nsview_at_pos (toplevel_impl, *x, *y);
+                subview = find_nsview_at_pos (toplevel_impl, x_tmp, y_tmp);
                 if (subview != NULL && ![subview isKindOfClass:[GdkQuartzView class]]) {
                   g_signal_emit_by_name (toplevel, "native-child-event",
                                          subview, nsevent);
