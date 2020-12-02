@@ -278,6 +278,22 @@ quartz_reset (GtkIMContext *context)
 }
 
 static void
+quartz_commit (GtkIMContext *context)
+{
+  GtkIMContextQuartz *qc = GTK_IM_CONTEXT_QUARTZ (context);
+  NSView *nsview;
+  GdkWindow *window;
+
+  if (!qc->client_window)
+    return;
+
+  nsview = gdk_quartz_window_get_nsview (qc->client_window);
+  window = (GdkWindow *)[(GdkQuartzView *)nsview gdkWindow];
+
+  output_result (context, window);
+}
+
+static void
 quartz_set_client_window (GtkIMContext *context, GdkWindow *window)
 {
   GtkIMContextQuartz *qc = GTK_IM_CONTEXT_QUARTZ (context);
@@ -305,7 +321,7 @@ quartz_focus_out (GtkIMContext *context)
   qc->focused = FALSE;
 
   /* Commit any partially built strings or it'll mess up other GTK+ widgets in the window */
-  discard_preedit (context);
+  quartz_commit (context);
 }
 
 static void
