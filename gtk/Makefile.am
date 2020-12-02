@@ -361,6 +361,8 @@ gtk_semi_private_h_sources =    \
 
 # GTK+ header files that don't get installed
 gtk_private_h_sources =		\
+	gb-animation.h		\
+	gb-frame-source.h	\
 	gtkquery.h		\
 	gtksearchengine.h	\
 	gtksearchenginesimple.h	\
@@ -411,6 +413,8 @@ gtk_private_h_sources =		\
 
 # GTK+ C sources to build the library from
 gtk_base_c_sources =            \
+	gb-animation.c		\
+	gb-frame-source.c	\
 	gtkquery.c		\
 	gtksearchengine.c	\
 	gtksearchenginesimple.c	\
